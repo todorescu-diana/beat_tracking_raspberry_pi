@@ -20,3 +20,13 @@ def init_lcd():
     
 def get_lcd():
     return lcd
+
+def clear_lcd_content():
+    lcd = get_lcd()
+    lcd.clear()
+    
+def display_lcd_content(content):
+    lcd = get_lcd()
+    lcd.clear()
+    lcd.message(content)
+    time.sleep(0.5)

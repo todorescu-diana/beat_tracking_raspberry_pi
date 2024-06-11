@@ -5,12 +5,13 @@ import RPi.GPIO as GPIO
 from utils.gpio_setup import init_gpio, cleanup_gpio
 import constants.pins as pins
 
-interval = 1
+interval = 0.25
 
 init_gpio()
 
 try:
-    for i in range(5):
+    for i in range(20):
+        print("????")
         GPIO.output(pins.SOLENOID_CONTROL, GPIO.HIGH)
         time.sleep(interval)
         GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)

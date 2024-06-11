@@ -68,42 +68,58 @@ def play_audio_with_clicktrack(track, detected_beats):
     
 
 def play_rhythm(beat_times):
-    start_time = time.time()
-    for beat in beat_times:
-        # Calculate the time to wait until the next beat
-        wait_time = beat - (time.time() - start_time) - 0.025
-        if wait_time > 0:
-            time.sleep(wait_time)
-        # Activate the solenoid
-        GPIO.output(pins.SOLENOID_CONTROL, GPIO.HIGH)
-        time.sleep(0.05)  # The duration the solenoid stays active (adjust as needed)
-        GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
-        time.sleep(0.05)
+    try:
+        start_time = time.time()
+        for beat in beat_times:
+            # Calculate the time to wait until the next beat
+            wait_time = beat - (time.time() - start_time) - 0.025
+            if wait_time > 0:
+                time.sleep(wait_time)
+            # Activate the solenoid
+            GPIO.output(pins.SOLENOID_CONTROL, GPIO.HIGH)
+            time.sleep(0.05)  # The duration the solenoid stays active (adjust as needed)
+            GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
+            time.sleep(0.05)
+    except Exception as e:
+        print(f"Exception in play_rhythm thread: {e}")
+    finally:
+        GPIO.cleanup()
 
 
 def play_audio_with_gpio(track, detected_beats):
-    y, sr = librosa.load(track.audio_path, sr=None)
-    click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
-                                 length=len(y), click_freq=1000)
+    try:
+        y, sr = librosa.load(track.audio_path, sr=None)
+        click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
+                                     length=len(y), click_freq=1000)
 
-    min_len = min(len(y), len(click_track))
-    y = y[:min_len]
+        min_len = min(len(y), len(click_track))
+        y = y[:min_len]
 
-    # combine the audio tracks
-    combined_audio = np.vstack((y, click_track))
+        # combine the audio tracks
+        combined_audio = np.vstack((y, click_track))
+        
+        # Event to signal thread stop
+        stop_event = threading.Event()
 
-    # Start the GPIO control thread
-    rhythm_thread = threading.Thread(target=play_rhythm, args=(detected_beats,))
-    rhythm_thread.start()
+        # Start the GPIO control thread
+        rhythm_thread = threading.Thread(target=play_rhythm, args=(detected_beats,))
+        rhythm_thread.start()
 
-    # play the combined audio tracks
-    sd.play(combined_audio.T, samplerate=sr)
-#     sd.play(click_track, samplerate=sr)
-    sd.wait()
+        # play the combined audio tracks
+        sd.play(combined_audio.T, samplerate=sr)
+    #     sd.play(click_track, samplerate=sr)
+        sd.wait()
 
-    # Wait for the rhythm thread to finish
-    rhythm_thread.join()
-#     play_rhythm(detected_beats)
+        # Wait for the rhythm thread to finish
+        rhythm_thread.join()
+    #     play_rhythm(detected_beats)
+    except Exception as e:
+        print(f"Exception in play_audio_with_gpio: {e}")
+        stop_event.set()
+        rhythm_thread.join()
+    else:
+        stop_event.set()
+        rhythm_thread.join()
 
 
 def get_detected_beats_dbn(beat_activations):

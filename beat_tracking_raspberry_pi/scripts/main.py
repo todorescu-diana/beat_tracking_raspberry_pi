@@ -8,7 +8,7 @@ from utils.utils import get_detected_beats_dbn, play_audio_with_clicktrack, play
 import constants.pins as pins
 from classes.audio_track import AudioTrack
 from keras.models import load_model
-from utils.lcd_utils import init_lcd, get_lcd
+from utils.lcd_utils import init_lcd, get_lcd, clear_lcd_content, display_lcd_content
 from utils.gpio_setup import cleanup_gpio, init_gpio
 import RPi.GPIO as GPIO
 import subprocess
@@ -47,23 +47,25 @@ def audio_callback(lcd, audio_path):
     lcd.message("Playing track: " + track_title + ' with beats')
     time.sleep(0.5)
     play_audio_with_gpio(track, beat_detections)
-    
         
 def main():
     init_gpio()
     init_lcd()
+    lcd = get_lcd()
     try:
-        access_usb_storage(audio_callback)
-#         play_rhythm([])
+#         access_usb_storage(audio_callback)
+#         audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
+        print(is_audio_file('/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav'))
     except Exception as e:
-        print("exception: ", e)
-        print("EXCEPT")
+        display_lcd_content(str(e))
+        time.sleep(5)
     finally:
         print("NOW UNMOUNT ...")
         subprocess.run(['sudo', 'umount', '/mnt/usb'])
         print("UNMOUNTED!")
         GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
         print("FINALLY")
+        clear_lcd_content()
         cleanup_gpio()
 
 if __name__ == "__main__":

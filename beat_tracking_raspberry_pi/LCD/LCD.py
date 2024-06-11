@@ -68,7 +68,7 @@ class LCD:
         self.bus.write_byte(self.I2C_ADDR,(bits & ~self.ENABLE))
         time.sleep(self.E_DELAY)
 
-    def message(self, string, scroll_speed=0.5, line_speed=2.0):
+    def message(self, string, scroll_speed=0.5, line_speed=0.25):
         # Display message string on LCD with automatic text wrapping and scrolling
 
         # Split the string into lines of appropriate length
