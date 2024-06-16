@@ -32,8 +32,18 @@ def explore_folder(folder_path, lcd, audio_callback, root_dir_name):
         display_lcd_content(f'{counter+1}/{len(items)}: ' + items[counter])
 
         while True:
-
-            if GPIO.input(pins.BUTTON_SELECT) == GPIO.HIGH:
+            sel = GPIO.input(pins.BUTTON_SELECT)
+            prv = GPIO.input(pins.BUTTON_PREV)
+            nxt = GPIO.input(pins.BUTTON_NEXT)
+            time.sleep(0.1)
+            while sel == GPIO.LOW and prv == GPIO.LOW and nxt == GPIO.LOW:
+                sel = GPIO.input(pins.BUTTON_SELECT)
+                prv = GPIO.input(pins.BUTTON_PREV)
+                nxt = GPIO.input(pins.BUTTON_NEXT)
+                time.sleep(0.1)
+            if sel == GPIO.HIGH:
+                while GPIO.input(pins.BUTTON_SELECT) == GPIO.HIGH:
+                    pass
                 selected_item = items[counter]
                 new_path = os.path.join(folder_path, selected_item)
                 if os.path.isdir(new_path):
@@ -44,18 +54,24 @@ def explore_folder(folder_path, lcd, audio_callback, root_dir_name):
                     display_lcd_content("Selected file:" + new_path)
                     if is_audio_file(new_path):
                         audio_callback(lcd, new_path)
+                    print("RETURNED IN EXPLORE FOLDER 2")
+                    explore_folder(folder_path, lcd, audio_callback, root_dir_name)
 
-            elif GPIO.input(pins.BUTTON_PREV) == GPIO.HIGH:
+            elif prv == GPIO.HIGH:
+                while GPIO.input(pins.BUTTON_PREV) == GPIO.HIGH:
+                    pass
                 if counter == 0 and folder_path != root_dir_name:
                     # navigate to the prev folder
                     folder_path = os.path.dirname(folder_path)
                     explore_folder(folder_path, lcd, audio_callback, root_dir_name)
                     break
                 else:
-                    counter -= 1
+                    counter = (counter - 1) % len(items)
                     display_lcd_content(f'{counter+1}/{len(items)}: ' + items[counter])
 
-            elif GPIO.input(pins.BUTTON_NEXT) == GPIO.HIGH:
+            elif nxt == GPIO.HIGH:
+                while GPIO.input(pins.BUTTON_NEXT) == GPIO.HIGH:
+                    pass
                 counter = (counter + 1) % len(items)
                 display_lcd_content(f'{counter+1}/{len(items)}: ' + items[counter])
             
@@ -95,7 +111,7 @@ def access_usb_storage(audio_callback):
                 if counter > 0:
                     counter -= 1
                     lcd.clear()
-                    display_lcd_content(f"Device {counter+1}/{len(mounted_devices)}")
+                    display_lcd_content(f"Device {counter-1}/{len(mounted_devices)}")
             elif nxt == GPIO.HIGH:
                 while GPIO.input(pins.BUTTON_NEXT) == GPIO.HIGH:
                     pass

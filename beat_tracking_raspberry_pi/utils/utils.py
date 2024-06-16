@@ -74,13 +74,13 @@ def play_rhythm(beat_times):
         for beat in beat_times:
             if stop_event.is_set():
                 break
-            wait_time = beat - (time.time() - start_time) - 0.025
+            wait_time = beat - (time.time() - start_time) - 0.08
             if wait_time > 0:
                 time.sleep(wait_time)
             GPIO.output(pins.SOLENOID_CONTROL, GPIO.HIGH)
-            time.sleep(0.05)  # The duration the solenoid stays active (adjust as needed)
+            time.sleep(0.045)  # The duration the solenoid stays active (adjust as needed)
             GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
-            time.sleep(0.05)
+            time.sleep(0.045)
     return
 
 class StoppableThread(threading.Thread):
@@ -95,7 +95,6 @@ class StoppableThread(threading.Thread):
 
     def perform_task(self):
         print("Thread working...")
-        self.task()
         time.sleep(1)
 
     def terminate(self):
@@ -141,6 +140,8 @@ def play_audio_with_gpio(track, detected_beats):
         rhythm_thread.terminate()
         rhythm_thread.join()
         handle_exception_catch(e)
+    finally:
+        return
 #     else:
 #         stop_event.set()
 #         rhythm_thread.terminate()

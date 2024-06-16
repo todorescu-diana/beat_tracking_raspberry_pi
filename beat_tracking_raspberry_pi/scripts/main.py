@@ -51,6 +51,8 @@ def audio_callback(lcd, audio_path):
     lcd.message("Playing track: " + track_title + ' with beats')
     time.sleep(0.5)
     play_audio_with_gpio(track, beat_detections)
+    print("RETURNED IN AUDIO_CALLBACK 1")
+    return
         
 def signal_handler(signum, frame):
     sys.exit(0)
@@ -79,6 +81,7 @@ def main():
     init_gpio()
     init_lcd()
     lcd = get_lcd()
+    display_lcd_content("Initializing ...")
     
     # Register the signal handler
     signal.signal(signal.SIGINT, signal_handler)
@@ -87,9 +90,9 @@ def main():
     GPIO.add_event_detect(pins.BUTTON_STOP_SCRIPT, GPIO.FALLING, callback=button_callback, bouncetime=200)
 
     try:
-#         access_usb_storage(audio_callback)
-        audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
-        print("RETURNED!!!")
+        access_usb_storage(audio_callback)
+#         audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
+#         print("RETURNED!!!")
         while True:
             time.sleep(100)
     except KeyboardInterrupt:
