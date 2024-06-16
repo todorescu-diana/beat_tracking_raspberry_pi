@@ -73,11 +73,6 @@ def access_usb_storage(audio_callback):
     # check for currently mounted USB storage devices
     context = pyudev.Context()
     mounted_devices = [device for device in context.list_devices(subsystem='block', DEVTYPE='partition') if 'ID_BUS' in device.properties and device.properties['ID_BUS'] == 'usb']
-    print("MOUNTED DEVICES: ", mounted_devices)
-    
-#     for root, dirs, files in os.walk(mount_point):
-#         for file in files:
-#             print(f'Found file: {os.path.join(root, file)}')
             
     if len(mounted_devices): # usb device(s) already inserted
         display_lcd_content(f"Found {len(mounted_devices)} USB storage device(s) already inserted: ")

@@ -1,19 +1,48 @@
 import numpy as np
 import librosa
-import matplotlib.pyplot as plt
 import sounddevice as sd
-import madmom
+import threading
+import time
+import RPi.GPIO as GPIO
+import subprocess
+import constants.pins as pins
 from constants.constants import FRAME_DURATION, FPS
 from utils.gpio_setup import init_gpio, cleanup_gpio
-import time
-import threading
-import RPi.GPIO as GPIO
-import constants.pins as pins
+from utils.lcd_utils import get_lcd, display_lcd_content, clear_lcd_content
+import madmom
 
+# Define a global flag to signal the thread to stop
+stop_event = threading.Event()
+
+# Function to clean up the script
+def do_script_cleanup():
+    print("NOW UNMOUNT ...")
+    subprocess.run(['sudo', 'umount', '/mnt/usb'])
+    print("UNMOUNTED!")
+    GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
+    print("FINALLY")
+    clear_lcd_content()
+    cleanup_gpio()
+
+# Function to handle exceptions
+def handle_exception_catch(e):
+    display_lcd_content("EXCEPTION HANDLE!!!!")
+    lcd = get_lcd()
+    display_lcd_content(str(e))
+    time.sleep(5)
+    print("NOW UNMOUNT ...")
+    subprocess.run(['sudo', 'umount', '/mnt/usb'])
+    print("UNMOUNTED!")
+    GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
+    print("FINALLY")
+    clear_lcd_content()
+    cleanup_gpio()
+
+# Convert beat times to frame indices
 def beats_to_frame_indices(beat_positions_seconds, frame_rate=FPS):
     return np.round(beat_positions_seconds * frame_rate).astype(int)
 
-
+# One-hot encode beats in the frames
 def one_hot_encode_beats(beat_positions_frames, total_frames):
     one_hot_vector = np.zeros(total_frames, dtype=float)
     for frame_index in beat_positions_frames:
@@ -21,36 +50,7 @@ def one_hot_encode_beats(beat_positions_frames, total_frames):
             one_hot_vector[int(frame_index)] = 1.  # convert frame_index to integer scalar
     return one_hot_vector
 
-
-def plot_activations(beat_activations):
-    # calculate time in seconds for each time frame
-    print(len(beat_activations))
-    time_frames = range(len(beat_activations))  # example time frames
-    time_seconds = np.array(time_frames) * FRAME_DURATION  # convert time frames to seconds as numpy array
-
-    # plot both beat activations and spectrogram in separate subplots within the same window
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-
-    # plot beat activations against frames
-    ax1.plot(beat_activations, label='Beat Activation', color='blue')
-    ax1.set_title('Model Beat Activation Output (Frames)')
-    ax1.set_xlabel('Frame Index')
-    ax1.set_ylabel('Activation Probability')
-    ax1.legend()
-    ax1.grid(True)
-
-    # plot beat activations against time in seconds
-    ax2.plot(time_seconds, beat_activations, label='Beat Activation', color='blue')
-    ax2.set_title('Model Beat Activation Output (Seconds)')
-    ax2.set_xlabel('Time (seconds)')
-    ax2.set_ylabel('Activation Probability')
-    ax2.legend()
-    ax2.grid(True)
-
-    plt.tight_layout()  # adjust layout to prevent overlap
-    plt.show()
-
-
+# Play audio with click track
 def play_audio_with_clicktrack(track, detected_beats):
     y, sr = librosa.load(track.audio_path, sr=None)
     click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
@@ -65,168 +65,91 @@ def play_audio_with_clicktrack(track, detected_beats):
     # play the combined audio tracks
     sd.play(combined_audio.T, samplerate=sr)
     sd.wait()
-    
 
+# Function to play rhythm using GPIO
 def play_rhythm(beat_times):
-    try:
+    global stop_event
+    while not stop_event.is_set():
         start_time = time.time()
         for beat in beat_times:
-            # Calculate the time to wait until the next beat
+            if stop_event.is_set():
+                break
             wait_time = beat - (time.time() - start_time) - 0.025
             if wait_time > 0:
                 time.sleep(wait_time)
-            # Activate the solenoid
             GPIO.output(pins.SOLENOID_CONTROL, GPIO.HIGH)
             time.sleep(0.05)  # The duration the solenoid stays active (adjust as needed)
             GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
             time.sleep(0.05)
-    except Exception as e:
-        print(f"Exception in play_rhythm thread: {e}")
-    finally:
-        GPIO.cleanup()
+    return
 
+class StoppableThread(threading.Thread):
+    def __init__(self, task, *args, **kwargs):
+        super(StoppableThread, self).__init__(*args, **kwargs)
+        self._terminate_flag = threading.Event()
+        self.task = task
 
+    def run(self):
+        while not self._terminate_flag.is_set():
+            self.perform_task()
+
+    def perform_task(self):
+        print("Thread working...")
+        self.task()
+        time.sleep(1)
+
+    def terminate(self):
+        self._terminate_flag.set()
+        print("Thread terminating...")
+
+# Handle button press to stop audio
+def handle_button_press(channel):
+    global stop_event
+    stop_event.set()
+    sd.stop()  # Stop the audio playback
+
+# Play audio with GPIO control
 def play_audio_with_gpio(track, detected_beats):
+    global stop_event
+    stop_event.clear()
+    
+    GPIO.add_event_detect(pins.BUTTON_STOP_AUDIO, GPIO.FALLING, callback=handle_button_press, bouncetime=300)
+    
+    y, sr = librosa.load(track.audio_path, sr=None)
+    click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
+                                 length=len(y), click_freq=1000)
+
+    min_len = min(len(y), len(click_track))
+    y = y[:min_len]
+
+    combined_audio = np.vstack((y, click_track))
+    sd.play(combined_audio.T, samplerate=sr)
+
+
+    rhythm_thread = StoppableThread(task=play_rhythm(detected_beats))
+    rhythm_thread.start()
+
     try:
-        y, sr = librosa.load(track.audio_path, sr=None)
-        click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
-                                     length=len(y), click_freq=1000)
-
-        min_len = min(len(y), len(click_track))
-        y = y[:min_len]
-
-        # combine the audio tracks
-        combined_audio = np.vstack((y, click_track))
-        
-        # Event to signal thread stop
-        stop_event = threading.Event()
-
-        # Start the GPIO control thread
-        rhythm_thread = threading.Thread(target=play_rhythm, args=(detected_beats,))
-        rhythm_thread.start()
-
-        # play the combined audio tracks
-        sd.play(combined_audio.T, samplerate=sr)
-    #     sd.play(click_track, samplerate=sr)
-        sd.wait()
-
-        # Wait for the rhythm thread to finish
+#         sd.play(combined_audio.T, samplerate=sr)
+        while not stop_event.is_set():
+            time.sleep(0.1)
+        rhythm_thread.terminate()
         rhythm_thread.join()
-    #     play_rhythm(detected_beats)
+        print("rhythm thread terminated")
+        sd.stop()  # Stop the audio playback if the event is set
     except Exception as e:
-        print(f"Exception in play_audio_with_gpio: {e}")
-        stop_event.set()
+        rhythm_thread.terminate()
         rhythm_thread.join()
-    else:
-        stop_event.set()
-        rhythm_thread.join()
+        handle_exception_catch(e)
+#     else:
+#         stop_event.set()
+#         rhythm_thread.terminate()
+#         rhythm_thread.join()
 
-
+# Get detected beats using DBN
 def get_detected_beats_dbn(beat_activations):
-    # track beats with a DBN
     beat_tracker = madmom.features.beats.DBNBeatTrackingProcessor(
         correct=True, min_bpm=55.0, max_bpm=215.0, fps=FPS, transition_lambda=100, threshold=0.05
     )
     detected_beats = beat_tracker(beat_activations)
-
     return detected_beats
-
-
-def get_longest_continuous_segment_length(bool_list):
-    max_length = 0.
-    current_length = 0.
-
-    for value in bool_list:
-        if value:
-            current_length += 1.
-        else:
-            max_length = max(max_length, current_length)
-            current_length = 0.
-
-    # check if the last segment is the longest
-    max_length = max(max_length, current_length)
-
-    return max_length
-
-def get_longest_continuous_segment_bounds(bool_list):
-    max_length = 0
-    current_length = 0
-    lower_bound = 0
-    upper_bound = 0
-    max_lower_bound = 0
-    max_upper_bound = 0
-
-    for index, value in enumerate(bool_list):
-        if value:
-            current_length += 1
-            if current_length == 1:
-                lower_bound = index  # update lower bound
-            upper_bound = index  # update upper bound
-        else:
-            if current_length > max_length:
-                max_length = current_length
-                max_lower_bound = lower_bound  # update max lower bound
-                max_upper_bound = upper_bound  # update max upper bound
-            current_length = 0
-
-    # check if the last segment is the longest
-    if current_length > max_length:
-        max_length = current_length
-        max_lower_bound = lower_bound
-        max_upper_bound = upper_bound
-
-    return max_lower_bound, max_upper_bound
-
-def get_all_except_longest_continuous_segment_bounds(bool_list):
-    max_length = 0
-    current_length = 0
-    lower_bound = 0
-    upper_bound = 0
-    max_lower_bound = 0
-    max_upper_bound = 0
-
-    all_bound_except_longest = []
-
-    for index, value in enumerate(bool_list):
-        if value:
-            current_length += 1
-            if current_length == 1:
-                lower_bound = index  # update lower bound
-            upper_bound = index  # update upper bound
-        else:
-            if current_length > max_length:
-                max_length = current_length
-                all_bound_except_longest.append((lower_bound, upper_bound))
-                max_lower_bound = lower_bound  # update max lower bound
-                max_upper_bound = upper_bound  # update max upper bound
-            current_length = 0
-
-    # check if the last segment is the longest
-    if current_length > max_length:
-        all_bound_except_longest.append((lower_bound, upper_bound))
-        max_length = current_length
-        max_lower_bound = lower_bound
-        max_upper_bound = upper_bound
-
-    filtered_all_bound_except_longest = [t for t in all_bound_except_longest if t != (max_lower_bound, max_upper_bound)]
-
-    return filtered_all_bound_except_longest
-
-
-def sum_continuous_true_segments(lst):
-    continuous_sum = 0  # initialize the sum of continuous True segments
-    current_segment_length = 0  # initialize the length of the current True segment
-
-    for item in lst:
-        if item:  # if the current item is True
-            current_segment_length += 1  # Increment the length of the current segment
-        else:  # if the current item is False
-            if current_segment_length > 1:  # if the current segment length is greater than 1
-                continuous_sum += current_segment_length  # add the current segment length to the continuous sum
-            current_segment_length = 0  # reset the current segment length
-
-    # check if there's an unprocessed segment at the end
-    if current_segment_length > 1:
-        continuous_sum += current_segment_length
-
-    return continuous_sum

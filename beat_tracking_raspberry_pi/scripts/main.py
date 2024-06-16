@@ -12,6 +12,10 @@ from utils.lcd_utils import init_lcd, get_lcd, clear_lcd_content, display_lcd_co
 from utils.gpio_setup import cleanup_gpio, init_gpio
 import RPi.GPIO as GPIO
 import subprocess
+import signal
+import os
+from utils.utils import handle_exception_catch, do_script_cleanup
+import threading
 
 def get_track_title(audio_path):
     # find the position of the last '/'
@@ -48,25 +52,52 @@ def audio_callback(lcd, audio_path):
     time.sleep(0.5)
     play_audio_with_gpio(track, beat_detections)
         
+def signal_handler(signum, frame):
+    sys.exit(0)
+    
+# Function to stop all threads except the main one
+def print_other_threads():
+    main_thread = threading.current_thread()
+    print(len(threading.enumerate()))
+    for t in threading.enumerate():
+        if t is main_thread:
+            print("---------- main_thread")
+            continue
+        print(f"------- thread: {t.name}")
+        if hasattr(t, "terminate"):
+            t.terminate()  # Example if you have a custom terminate method
+
+def button_callback(channel):
+    lcd = get_lcd()
+    display_lcd_content("button_callback")
+    print_other_threads()
+    time.sleep(0.5)
+    handle_exception_catch('SCRIPT STOPPING ...')
+    os.kill(os.getpid(), signal.SIGINT)
+        
 def main():
     init_gpio()
     init_lcd()
     lcd = get_lcd()
+    
+    # Register the signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Add event detection on the button pin
+    GPIO.add_event_detect(pins.BUTTON_STOP_SCRIPT, GPIO.FALLING, callback=button_callback, bouncetime=200)
+
     try:
 #         access_usb_storage(audio_callback)
-#         audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
-        print(is_audio_file('/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav'))
+        audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
+        print("RETURNED!!!")
+        while True:
+            time.sleep(100)
+    except KeyboardInterrupt:
+        print("Script stopped by CTRL+C")
     except Exception as e:
-        display_lcd_content(str(e))
-        time.sleep(5)
-    finally:
-        print("NOW UNMOUNT ...")
-        subprocess.run(['sudo', 'umount', '/mnt/usb'])
-        print("UNMOUNTED!")
-        GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
-        print("FINALLY")
-        clear_lcd_content()
-        cleanup_gpio()
+        handle_exception_catch(e)
+    else:
+        do_script_cleanup()
 
 if __name__ == "__main__":
     main()

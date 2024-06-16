@@ -8,6 +8,8 @@ def init_gpio():
     GPIO.setup(pins.BUTTON_SELECT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(pins.BUTTON_PREV, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(pins.BUTTON_NEXT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(pins.BUTTON_STOP_SCRIPT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(pins.BUTTON_STOP_AUDIO, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(pins.SOLENOID_CONTROL, GPIO.OUT, initial=GPIO.LOW)
 
 def cleanup_gpio():

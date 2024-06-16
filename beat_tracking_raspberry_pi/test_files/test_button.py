@@ -1,26 +1,35 @@
-import RPi.GPIO as GPIO # Import Raspberry Pi GPIO library
+import sys
+sys.path.append('/home/raspberrypi5/Desktop/beat_tracking_v2')
+import RPi.GPIO as GPIO
 import time
+from constants import pins
 
-GPIO.setmode(GPIO.BCM) # Use physical pin numbering
-GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) # Set pin 10 to be an input pin and set initial value to be pulled low (off)
-GPIO.setup(19, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) # Set pin 10 to be an input pin and set initial value to be pulled low (off)
-GPIO.setup(13, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) # Set pin 10 to be an input pin and set initial value to be pulled low (off)
+GPIO.setmode(GPIO.BCM) # use physical pin numbering
+GPIO.setup(pins.BUTTON_PREV, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(pins.BUTTON_NEXT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(pins.BUTTON_SELECT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(pins.BUTTON_STOP_SCRIPT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(pins.BUTTON_STOP_AUDIO, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 try:
     while True:
-        button_state_26 = GPIO.input(26)
-        button_state_19 = GPIO.input(19)
-        button_state_13 = GPIO.input(13)
+        BUTTON_PREV = GPIO.input(pins.BUTTON_PREV)
+        BUTTON_NEXT = GPIO.input(pins.BUTTON_NEXT)
+        BUTTON_SELECT = GPIO.input(pins.BUTTON_SELECT)
+        BUTTON_STOP_SCRIPT = GPIO.input(pins.BUTTON_STOP_SCRIPT)
+        BUTTON_STOP_AUDIO = GPIO.input(pins.BUTTON_STOP_AUDIO)
         
-        if button_state_26 == GPIO.HIGH:
-            print("26")
-        
-        if button_state_19 == GPIO.HIGH:
-            print("19")
-            
-        if button_state_13 == GPIO.HIGH:
-            print("13")
+        if BUTTON_PREV == GPIO.HIGH:
+            print("BUTTON_PREV")
+        if BUTTON_NEXT == GPIO.HIGH:
+            print("BUTTON_NEXT")
+        if BUTTON_SELECT == GPIO.HIGH:
+            print("BUTTON_SELECT")
+        if BUTTON_STOP_SCRIPT == GPIO.HIGH:
+            print("BUTTON_STOP_SCRIPT")
+        if BUTTON_STOP_AUDIO == GPIO.HIGH:
+            print("BUTTON_STOP_AUDIO")
         time.sleep(0.1)
         
 except KeyboardInterrupt:
-    GPIO.cleanup() # Clean up
+    GPIO.cleanup() # clean up
