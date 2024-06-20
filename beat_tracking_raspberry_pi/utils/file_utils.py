@@ -54,7 +54,8 @@ def explore_folder(folder_path, lcd, audio_callback, root_dir_name):
                     display_lcd_content("Selected file:" + new_path)
                     if is_audio_file(new_path):
                         audio_callback(lcd, new_path)
-                    print("RETURNED IN EXPLORE FOLDER 2")
+                    else:
+                        display_lcd_content("Selected file is not an audio file.")
                     explore_folder(folder_path, lcd, audio_callback, root_dir_name)
 
             elif prv == GPIO.HIGH:
@@ -77,7 +78,7 @@ def explore_folder(folder_path, lcd, audio_callback, root_dir_name):
             
             time.sleep(0.1) 
     else:
-        display_lcd_content("No content available on USB.")
+        display_lcd_content("No content available on USB device.")
 
 def access_usb_storage(audio_callback):
     lcd = get_lcd()
@@ -107,7 +108,6 @@ def access_usb_storage(audio_callback):
             if prv == GPIO.HIGH:
                 while GPIO.input(pins.BUTTON_PREV) == GPIO.HIGH:
                     pass
-                print("PREV")
                 if counter > 0:
                     counter -= 1
                     lcd.clear()
@@ -115,7 +115,6 @@ def access_usb_storage(audio_callback):
             elif nxt == GPIO.HIGH:
                 while GPIO.input(pins.BUTTON_NEXT) == GPIO.HIGH:
                     pass
-                print("NEXT")
                 if counter < len(mounted_devices) - 1:
                     counter += 1
                     lcd.clear()
@@ -123,20 +122,17 @@ def access_usb_storage(audio_callback):
             elif sel == GPIO.HIGH:
                 while GPIO.input(pins.BUTTON_SELECT) == GPIO.HIGH:
                     pass
-                print("SEL")
                 device = mounted_devices[counter]
                     
                 mount_point = '/mnt/usb'
                 subprocess.run(['sudo', 'mkdir', '-p', mount_point])
                 subprocess.run(['sudo', 'mount', device.device_node, mount_point])
-                print("MOUNTED!")
                 
                 selected_mount_point = mount_point
                 explore_folder(selected_mount_point, lcd, audio_callback, root_dir_name=selected_mount_point)
         time.sleep(0.1)
     else:
         display_lcd_content("Listening for USB input...")
-        # check what happens for multiple inputs
      
         monitor = pyudev.Monitor.from_netlink(pyudev.Context())
         monitor.filter_by(subsystem='block', device_type='partition')
@@ -144,45 +140,4 @@ def access_usb_storage(audio_callback):
             if device.action == 'add':
                 if 'ID_BUS' in device.properties and device.properties['ID_BUS'] == 'usb':
                     display_lcd_content("USB storage device inserted:" + device.device_node)
-                    
-                    while True:
-                        sel = GPIO.input(pins.BUTTON_SELECT)
-                        prv = GPIO.input(pins.BUTTON_PREV)
-                        nxt = GPIO.input(pins.BUTTON_NEXT)
-                        time.sleep(0.1)
-                        
-                        while sel == GPIO.LOW and prv == GPIO.LOW and nxt == GPIO.LOW:
-                            sel = GPIO.input(pins.BUTTON_SELECT)
-                            prv = GPIO.input(pins.BUTTON_PREV)
-                            nxt = GPIO.input(pins.BUTTON_NEXT)
-                            time.sleep(0.1)
-                        if prv == GPIO.HIGH:
-                            while GPIO.input(pins.BUTTON_PREV) == GPIO.HIGH:
-                                pass
-                            print("PREV")
-#                             if counter > 0:
-#                                 counter -= 1
-#                                 lcd.clear()
-#                                 display_lcd_content(f"Device {counter+1}/{len(mounted_devices)}")
-                        elif nxt == GPIO.HIGH:
-                            while GPIO.input(pins.BUTTON_NEXT) == GPIO.HIGH:
-                                pass
-                            print("NEXT")
-#                             if counter < len(mounted_devices) - 1:
-#                                 counter += 1
-#                                 lcd.clear()
-#                                 display_lcd_content(f"Device {counter+1}/{len(mounted_devices)}")
-                        elif sel == GPIO.HIGH:
-                            while GPIO.input(pins.BUTTON_SELECT) == GPIO.HIGH:
-                                pass
-                            print("SEL")
-#                             device = mounted_devices[counter]
-                                
-                            mount_point = '/mnt/usb'
-                            subprocess.run(['sudo', 'mkdir', '-p', mount_point])
-                            subprocess.run(['sudo', 'mount', device.device_node, mount_point])
-                            print("MOUNTED!")
-                            
-                            selected_mount_point = mount_point
-                            explore_folder(selected_mount_point, lcd, audio_callback, root_dir_name=selected_mount_point)
-                    time.sleep(0.1)
+                    access_usb_storage(audio_callback)

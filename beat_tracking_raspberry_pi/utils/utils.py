@@ -13,36 +13,45 @@ import madmom
 
 # Define a global flag to signal the thread to stop
 stop_event = threading.Event()
+stop_script = False
+
+def set_stop_script(val):
+    global stop_script
+    stop_script = val
 
 # Function to clean up the script
 def do_script_cleanup():
-    print("NOW UNMOUNT ...")
+    display_lcd_content("Unmounting USB memory device ...")
+    time.sleep(2)
     subprocess.run(['sudo', 'umount', '/mnt/usb'])
-    print("UNMOUNTED!")
+    display_lcd_content("Unmounted USB memory device.")
+    time.sleep(2)
     GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
-    print("FINALLY")
+    display_lcd_content("Cleaning up ...")
+    time.sleep(2)
     clear_lcd_content()
     cleanup_gpio()
 
 # Function to handle exceptions
 def handle_exception_catch(e):
-    display_lcd_content("EXCEPTION HANDLE!!!!")
-    lcd = get_lcd()
-    display_lcd_content(str(e))
-    time.sleep(5)
-    print("NOW UNMOUNT ...")
+    display_lcd_content("Handling EXCEPTION: " + str(e))
+    time.sleep(4)
+    display_lcd_content("Unmounting USB memory device ...")
+    time.sleep(2)
     subprocess.run(['sudo', 'umount', '/mnt/usb'])
-    print("UNMOUNTED!")
+    display_lcd_content("Unmounted USB memory device.")
+    time.sleep(2)
+    display_lcd_content("Cleaning up ...")
+    time.sleep(2)
     GPIO.output(pins.SOLENOID_CONTROL, GPIO.LOW)
-    print("FINALLY")
     clear_lcd_content()
     cleanup_gpio()
 
-# Convert beat times to frame indices
+# convert beat times to frame indices
 def beats_to_frame_indices(beat_positions_seconds, frame_rate=FPS):
     return np.round(beat_positions_seconds * frame_rate).astype(int)
 
-# One-hot encode beats in the frames
+# one-hot encode beats in the frames
 def one_hot_encode_beats(beat_positions_frames, total_frames):
     one_hot_vector = np.zeros(total_frames, dtype=float)
     for frame_index in beat_positions_frames:
@@ -50,7 +59,7 @@ def one_hot_encode_beats(beat_positions_frames, total_frames):
             one_hot_vector[int(frame_index)] = 1.  # convert frame_index to integer scalar
     return one_hot_vector
 
-# Play audio with click track
+# play audio with click track
 def play_audio_with_clicktrack(track, detected_beats):
     y, sr = librosa.load(track.audio_path, sr=None)
     click_track = librosa.clicks(frames=librosa.time_to_frames(detected_beats, sr=sr), sr=sr,
@@ -66,7 +75,7 @@ def play_audio_with_clicktrack(track, detected_beats):
     sd.play(combined_audio.T, samplerate=sr)
     sd.wait()
 
-# Function to play rhythm using GPIO
+# function to play rhythm using GPIO
 def play_rhythm(beat_times):
     global stop_event
     while not stop_event.is_set():
@@ -85,29 +94,24 @@ def play_rhythm(beat_times):
 
 class StoppableThread(threading.Thread):
     def __init__(self, task, *args, **kwargs):
+        global stop_event
         super(StoppableThread, self).__init__(*args, **kwargs)
-        self._terminate_flag = threading.Event()
+        self._terminate_flag = stop_event
         self.task = task
-
-    def run(self):
-        while not self._terminate_flag.is_set():
-            self.perform_task()
-
-    def perform_task(self):
-        print("Thread working...")
-        time.sleep(1)
 
     def terminate(self):
         self._terminate_flag.set()
         print("Thread terminating...")
 
-# Handle button press to stop audio
+# handle button press to stop audio
 def handle_button_press(channel):
     global stop_event
+    display_lcd_content("Stopping audio and rhythm ...")
+    time.sleep(2)
     stop_event.set()
     sd.stop()  # Stop the audio playback
 
-# Play audio with GPIO control
+# play audio with GPIO control
 def play_audio_with_gpio(track, detected_beats):
     global stop_event
     stop_event.clear()
@@ -134,20 +138,25 @@ def play_audio_with_gpio(track, detected_beats):
             time.sleep(0.1)
         rhythm_thread.terminate()
         rhythm_thread.join()
-        print("rhythm thread terminated")
-        sd.stop()  # Stop the audio playback if the event is set
+        # rhythm thread terminated
+        sd.stop()  # stop the audio playback if the event is set
+        if stop_script == True:
+            while True:
+                time.sleep(0.1)
+    except KeyboardInterrupt:
+        rhythm_thread.terminate()
+        rhythm_thread.join()
+        handle_exception_catch("")
     except Exception as e:
         rhythm_thread.terminate()
         rhythm_thread.join()
         handle_exception_catch(e)
     finally:
-        return
-#     else:
-#         stop_event.set()
-#         rhythm_thread.terminate()
-#         rhythm_thread.join()
-
-# Get detected beats using DBN
+        if stop_script == False:
+            GPIO.remove_event_detect(pins.BUTTON_STOP_AUDIO)
+            return
+    
+# get detected beats using DBN
 def get_detected_beats_dbn(beat_activations):
     beat_tracker = madmom.features.beats.DBNBeatTrackingProcessor(
         correct=True, min_bpm=55.0, max_bpm=215.0, fps=FPS, transition_lambda=100, threshold=0.05

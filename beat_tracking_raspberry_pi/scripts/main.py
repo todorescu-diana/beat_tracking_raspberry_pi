@@ -4,7 +4,7 @@ import time
 from utils.file_utils import access_usb_storage
 from classes.spectrogram_processor import SpectrogramProcessor
 from classes.spectrogram_sequence import SpectrogramSequence
-from utils.utils import get_detected_beats_dbn, play_audio_with_clicktrack, play_audio_with_gpio, play_rhythm
+from utils.utils import get_detected_beats_dbn, play_audio_with_clicktrack, play_audio_with_gpio, play_rhythm, handle_button_press, set_stop_script
 import constants.pins as pins
 from classes.audio_track import AudioTrack
 from keras.models import load_model
@@ -18,12 +18,9 @@ from utils.utils import handle_exception_catch, do_script_cleanup
 import threading
 
 def get_track_title(audio_path):
-    # find the position of the last '/'
     last_slash_index = audio_path.rfind('/')
-    # find the position of the last '.'
     last_dot_index = audio_path.rfind('.')
     
-    # extract the substring between the last '/' and the last '.'
     if last_slash_index != -1 and last_dot_index != -1 and last_dot_index > last_slash_index:
         return audio_path[last_slash_index + 1:last_dot_index]
     else:
@@ -51,52 +48,52 @@ def audio_callback(lcd, audio_path):
     lcd.message("Playing track: " + track_title + ' with beats')
     time.sleep(0.5)
     play_audio_with_gpio(track, beat_detections)
-    print("RETURNED IN AUDIO_CALLBACK 1")
     return
         
 def signal_handler(signum, frame):
+    display_lcd_content("Exiting ...")
+    clear_lcd_content()
+    time.sleep(1)
     sys.exit(0)
     
 # Function to stop all threads except the main one
 def print_other_threads():
     main_thread = threading.current_thread()
-    print(len(threading.enumerate()))
+    print(threading.enumerate())
     for t in threading.enumerate():
         if t is main_thread:
-            print("---------- main_thread")
             continue
-        print(f"------- thread: {t.name}")
         if hasattr(t, "terminate"):
+            print("!!!!!!!!!!!!!!!!!!!!")
             t.terminate()  # Example if you have a custom terminate method
 
 def button_callback(channel):
     lcd = get_lcd()
-    display_lcd_content("button_callback")
-    print_other_threads()
+    display_lcd_content("Stopping the script ...")
+#     print_other_threads()
     time.sleep(0.5)
-    handle_exception_catch('SCRIPT STOPPING ...')
+    set_stop_script(True)
+    time.sleep(0.5)
+    handle_button_press(channel)
+    do_script_cleanup()
     os.kill(os.getpid(), signal.SIGINT)
         
 def main():
-    init_gpio()
-    init_lcd()
-    lcd = get_lcd()
-    display_lcd_content("Initializing ...")
-    
-    # Register the signal handler
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Add event detection on the button pin
-    GPIO.add_event_detect(pins.BUTTON_STOP_SCRIPT, GPIO.FALLING, callback=button_callback, bouncetime=200)
-
     try:
+        init_gpio()
+        init_lcd()
+        lcd = get_lcd()
+        display_lcd_content("Initializing ...")
+        
+        # register the signal handler
+        signal.signal(signal.SIGINT, signal_handler)
+
+        # add event detection on the button pin
+        GPIO.add_event_detect(pins.BUTTON_STOP_SCRIPT, GPIO.FALLING, callback=button_callback, bouncetime=300)
+    
         access_usb_storage(audio_callback)
-#         audio_callback(lcd, '/home/raspberrypi5/Desktop/beat_tracking_v2/audio_wav_files/chericherilady.wav')
-#         print("RETURNED!!!")
-        while True:
-            time.sleep(100)
     except KeyboardInterrupt:
-        print("Script stopped by CTRL+C")
+        handle_exception_catch("")
     except Exception as e:
         handle_exception_catch(e)
     else:
