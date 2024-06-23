@@ -132,12 +132,12 @@ def access_usb_storage(audio_callback):
                 explore_folder(selected_mount_point, lcd, audio_callback, root_dir_name=selected_mount_point)
         time.sleep(0.1)
     else:
-        display_lcd_content("Listening for USB input...")
+        display_lcd_content("Listening for USB input ...")
      
         monitor = pyudev.Monitor.from_netlink(pyudev.Context())
         monitor.filter_by(subsystem='block', device_type='partition')
         for device in iter(monitor.poll, None):
             if device.action == 'add':
                 if 'ID_BUS' in device.properties and device.properties['ID_BUS'] == 'usb':
-                    display_lcd_content("USB storage device inserted:" + device.device_node)
+                    display_lcd_content("USB storage device inserted: " + device.device_node)
                     access_usb_storage(audio_callback)

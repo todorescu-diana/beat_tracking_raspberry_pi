@@ -9,14 +9,14 @@ from keras.layers import (
     Conv2D,
     MaxPooling2D,
     Reshape,
-    Dropout
+    Dropout,
+    SpatialDropout1D,
 )
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
 from classes.tcn import TCN
 from utils.utils import get_detected_beats_dbn
-from constants.constants import CSV_LOSSES_PATH, INPUT_SHAPE, ACTIVATION_1, NUM_FILTERS_TCN_1, KERNEL_SIZE_TCN_1, NUM_FILTERS_2, \
-    DROPOUT_RATE_2, NUM_DILATIONS_TCN_2, NUM_EPOCHS, plot_colors
+from constants.constants import ACTIVATION, CONV_NUM_FILTERS, CSV_LOSSES_PATH, INPUT_SHAPE, TCN_NUM_FILTERS, TCN_KERNEL_SIZE, DROPOUT_RATE, TCN_NUM_DILATIONS, NUM_EPOCHS, plot_colors
 import io
 import numpy as np
 from contextlib import redirect_stdout
@@ -29,13 +29,12 @@ def cnn_pad(data, pad_frames):
     return np.concatenate((pad_start, data, pad_stop))
 
 
-def build_model(input_shape=INPUT_SHAPE, num_conv_filters=NUM_FILTERS_2, activation=ACTIVATION_1,
-                dropout_rate=DROPOUT_RATE_2, tcn_num_filters=NUM_FILTERS_TCN_1, tcn_kernel_size=KERNEL_SIZE_TCN_1,
-                tcn_num_dilations=NUM_DILATIONS_TCN_2):
-    # Input layer
+def build_model(input_shape=INPUT_SHAPE, num_conv_filters=CONV_NUM_FILTERS, activation=ACTIVATION,
+                dropout_rate=DROPOUT_RATE, tcn_num_filters=TCN_NUM_FILTERS, tcn_kernel_size=TCN_KERNEL_SIZE,
+                tcn_num_dilations=TCN_NUM_DILATIONS):
+    
     input_layer = Input(batch_shape=input_shape)
-
-    # stack of 3 conv layers, each conv, activation, max. pooling & dropout
+    
     conv_1 = Conv2D(num_conv_filters, (3, 3), padding='valid', name='conv_1_conv')(input_layer)
     conv_1 = Activation(activation, name='conv_1_activation')(conv_1)
     conv_1 = MaxPooling2D((1, 3), name='conv_1_max_pooling')(conv_1)
@@ -48,33 +47,32 @@ def build_model(input_shape=INPUT_SHAPE, num_conv_filters=NUM_FILTERS_2, activat
 
     conv_3 = Conv2D(num_conv_filters, (1, 8), padding='valid', name='conv_3_conv')(conv_2)
     conv_3 = Activation(activation, name='conv_3_activation')(conv_3)
-    conv_3 = MaxPooling2D((1, 3), name='conv_3_max_pooling')(conv_3)
     conv_3 = Dropout(dropout_rate, name='conv_3_dropout')(conv_3)
 
-    # Flatten layer
     reshape = Reshape(target_shape=(-1, num_conv_filters))(conv_3)
 
-    # TCN layers
     dilations = [2 ** i for i in range(tcn_num_dilations)]
     tcn = TCN(
-        num_filters=[tcn_num_filters] * len(dilations),
+        num_filters=tcn_num_filters,
         kernel_size=tcn_kernel_size,
         dilations=dilations,
         activation=activation,
         padding='same',
         dropout_rate=dropout_rate,
     )(reshape)
-    # Dense layers
+
     beats = Dropout(dropout_rate, name='beats_dropout')(tcn)
     beats = Dense(1)(beats)
     beats = Activation(activation='sigmoid', name='beats')(beats)
 
-    # Model
     return Model(inputs=input_layer, outputs=[beats])
 
-
-def compile_model(model, summary=False, model_name='', summary_save_path=''):
-    optimizer = Adam(learning_rate=0.002)
+def compile_model(model, summary=False, model_name='', summary_save_path='', lr=None):
+    if lr is not None:
+        learning_rate = lr
+    else:
+        learning_rate = 0.001
+    optimizer = Adam(learning_rate=learning_rate)
 
     model.compile(optimizer=optimizer,
                   loss=[K.binary_crossentropy],
@@ -95,7 +93,7 @@ def compile_model(model, summary=False, model_name='', summary_save_path=''):
             text_file.write(model_summary)
 
 
-def train_model(model, train_data, test_data=None, model_name='', save_model=False, model_save_path='', epochs=NUM_EPOCHS, plot_save=False, plot_save_path=''):
+def train_model(model, train_data, test_data=None, model_name='', save_model=False, model_save_path='', epochs=NUM_EPOCHS, plot_save=False, plot_save_path='', plot_display=True, csv_log=True):
     # define callbacks
 
     mc = ModelCheckpoint(model_save_path + '/' + model_name + '_best.h5', monitor='loss', save_best_only=True, verbose=0)
@@ -104,10 +102,12 @@ def train_model(model, train_data, test_data=None, model_name='', save_model=Fal
     es = EarlyStopping(monitor='loss', min_delta=1e-4, patience=50, verbose=0)
     csv_logger = CSVLogger(CSV_LOSSES_PATH + '/' + model_name + '.csv', append=True, separator=';')
 
+    callbacks = [lr, es]
+
     if save_model and model_save_path != '':
-        callbacks = [mc, lr, es, csv_logger]
-    else:
-        callbacks = [lr, es, csv_logger]
+        callbacks.append(mc)
+    if csv_log:
+        callbacks.append(csv_logger)
 
     if test_data is not None:
         validation_data = test_data
@@ -124,9 +124,9 @@ def train_model(model, train_data, test_data=None, model_name='', save_model=Fal
                         validation_steps=validation_steps,
                         shuffle=True,
                         callbacks=callbacks)
-
-    plot_metrics(history, metric='binary_accuracy', model_name=model_name, plot_save=plot_save, plot_save_path=plot_save_path, validation_included=(test_data is not None))
-    plot_metrics(history, metric='loss', model_name=model_name, plot_save=plot_save, plot_save_path=plot_save_path, validation_included=(test_data is not None))
+    if plot_display or plot_save:
+        plot_metrics(history, metric='binary_accuracy', model_name=model_name, plot_save=plot_save, plot_save_path=plot_save_path, validation_included=(test_data is not None))
+        plot_metrics(history, metric='loss', model_name=model_name, plot_save=plot_save, plot_save_path=plot_save_path, validation_included=(test_data is not None))
 
 
 def plot_metrics(history, metric, validation_included, model_name='', plot_save=False, plot_save_path=''):
@@ -153,9 +153,11 @@ def plot_metrics(history, metric, validation_included, model_name='', plot_save=
     if plot_save and plot_save_path != '':
         if validation_included:
             plt.savefig(f'{plot_save_path}/{model_name}_{metric}_plot.png', format='png')
+            plt.close()
             print(f"Plot saved as {plot_save_path}/{model_name}_{metric}_plot.png")
         else:
             plt.savefig(f'{plot_save_path}/{model_name}_{metric}_plot.png', format='png')
+            plt.close()
             print(f"Plot saved as {plot_save_path}/{model_name}_{metric}_plot.png")
     else:
         plt.show()
@@ -164,7 +166,6 @@ def plot_metrics(history, metric, validation_included, model_name='', plot_save=
 def predict(model, spectrogram_sequence_dataset):
     activations = {}
     detections = {}
-    print("INSIDE PREDICT FUNCTION")
 
     for i, batch_data in enumerate(spectrogram_sequence_dataset):
         # file name

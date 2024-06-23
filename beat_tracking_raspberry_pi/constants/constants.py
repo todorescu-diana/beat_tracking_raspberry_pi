@@ -1,14 +1,20 @@
 import numpy as np
 
 FPS = 100
-HOP_SIZE = 441
-FIXED_SAMPLE_RATE = 44100
-FFT_SIZE = 2048
 
 F_MIN = 30
 F_MAX = 10000
+F_MAX_2 = 15360
 
-NUM_BINS = int(12*(np.log2(F_MAX/F_MIN)))
+FIXED_SAMPLE_RATE = 44100
+HOP_LENGTH = int((1 / FPS) * FIXED_SAMPLE_RATE)
+N_FFT = 2048
+WINDOW = 'hann'
+N_MELS = 81
+
+LOG_BASE = 2
+
+N_BANDS_PER_OCTAVE = 12
 
 FRAME_DURATION = 1 / FPS
 
@@ -16,29 +22,24 @@ PAD_FRAMES = 2
 
 NUM_FRAMES = 5
 
-INPUT_SHAPE = (None, None, NUM_BINS, 1)
+INPUT_SHAPE = (1, None, None, 1)
+
+BINS_PER_OCTAVE = 12
+NUM_BINS = 81
 
 # conv layers
-ACTIVATION_1 = 'elu'
-DROPOUT_RATE_1 = 0.15
-NUM_FILTERS_1 = 20
+ACTIVATION = 'elu'
+DROPOUT_RATE = 0.15
+# CONV_NUM_FILTERS = 16
+CONV_NUM_FILTERS = 20
+DROPOUT_RATE = 0.1
 
-# tcn layers
-NUM_DILATIONS_TCN_1 = 5
-NUM_FILTERS_TCN_1 = 20
-KERNEL_SIZE_TCN_1 = 5
-ACTIVATION_TCN_1 = 'elu'
-DROPOUT_RATE_TCN_1 = 0.15
-
-# optimizer
-LEARNRATE_1 = 0.002
-CLIPNORM_1 = 0.5
-
-NUM_FILTERS_2 = 16
-DROPOUT_RATE_2 = 0.1
-NUM_FILTERS_TCN_2 = 16
-NUM_DILATIONS_TCN_2 = 11
-DROPOUT_RATE_TCN_2 = 0.1
+# tcn
+TCN_KERNEL_SIZE = 5
+# TCN_NUM_FILTERS = 16
+TCN_NUM_FILTERS = 20
+TCN_DILATIONS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+TCN_NUM_DILATIONS = 11
 
 # k-fold-cross-validation
 NUM_FOLDS = 8
@@ -46,7 +47,7 @@ NUM_FOLDS = 8
 # train
 NUM_EPOCHS = 100
 
-VALID_DATASET_NAMES = ['ballroom', 'smc', 'gtzan', 'dagstuhl_choir', 'beatboxset', 'guitarset_mic', 'guitarset_pickup', 'tiny_aam']
+VALID_DATASET_NAMES = ['ballroom', 'smc', 'dagstuhl_choir', 'beatboxset', 'guitarset_mic', 'guitarset_pickup', 'tiny_aam', 'harmonix_set', 'gtzan_rhythm', 'aam']
 
 DATASET_PATHS = {
     VALID_DATASET_NAMES[0]: {
@@ -78,6 +79,14 @@ DATASET_PATHS = {
         "annot_dir": ''
     },
     VALID_DATASET_NAMES[7]: {
+        "audio_dir": '',
+        "annot_dir": ''
+    },
+    VALID_DATASET_NAMES[8]: {
+        "audio_dir": '',
+        "annot_dir": ''
+    },
+    VALID_DATASET_NAMES[9]: {
         "audio_dir": '',
         "annot_dir": ''
     }

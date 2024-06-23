@@ -36,9 +36,9 @@ def audio_callback(lcd, audio_path):
     track = AudioTrack(audio_path)
     track_dict = {track_title: track}
     
-    tracks_sequence = SpectrogramSequence(data_sequence_tracks=track_dict, data_sequence_pre_processor=pre_processor, data_sequence_pad_frames=2)
+    tracks_sequence = SpectrogramSequence(tracks=track_dict, pre_processor=pre_processor, pad_frames=2)
     
-    model = load_model('/home/raspberrypi5/Desktop/beat_tracking_v2/models/trained_gtzan_v2_best.h5')
+    model = load_model('/home/raspberrypi5/Desktop/beat_tracking_v2/models/trained_aam_FULL_v2_mel_best.h5')
 
     beats = model.predict(tracks_sequence[0])
     beat_activations = beats.squeeze()
